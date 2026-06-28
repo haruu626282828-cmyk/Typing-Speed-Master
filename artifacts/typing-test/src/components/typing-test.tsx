@@ -9,11 +9,12 @@ import { motion, AnimatePresence } from "framer-motion";
 interface TypingTestProps {
   passage: string;
   duration: number;
+  personalBestWpm?: number;
   onComplete: (stats: { wpm: number; cpm: number; accuracy: number; mistakes: number }) => void;
   onNext: () => void;
 }
 
-export function TypingTest({ passage, duration, onComplete, onNext }: TypingTestProps) {
+export function TypingTest({ passage, duration, personalBestWpm, onComplete, onNext }: TypingTestProps) {
   const {
     status,
     timeLeft,
@@ -30,8 +31,7 @@ export function TypingTest({ passage, duration, onComplete, onNext }: TypingTest
     getCharState,
   } = useTypingTest({ passage, duration });
 
-  const containerRef = useRef<HTMLDivElement>(null);
-  const mobileInputRef = useRef<HTMLTextAreaElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (status === "completed") {
@@ -39,19 +39,27 @@ export function TypingTest({ passage, duration, onComplete, onNext }: TypingTest
     }
   }, [status, wpm, cpm, accuracy, mistakes, onComplete]);
 
+  // Auto-focus the textarea when idle/running
   useEffect(() => {
     if (status === "idle" || status === "running") {
-      containerRef.current?.focus();
+      textareaRef.current?.focus();
     }
   }, [status]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const focusInput = () => {
+    textareaRef.current?.focus();
+  };
+
+  // Handles physical keyboard (desktop) — we e.preventDefault() to suppress
+  // the textarea's native insertion, then manually update typedText state.
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Tab" || e.key === "Escape") {
       e.preventDefault();
       if (status === "running") pause();
       return;
     }
     if (e.ctrlKey || e.altKey || e.metaKey) return;
+
     if (e.key === "Backspace") {
       e.preventDefault();
       if (status === "idle") start();
@@ -59,13 +67,17 @@ export function TypingTest({ passage, duration, onComplete, onNext }: TypingTest
       handleTyping(typedText.slice(0, -1));
       return;
     }
-    if (e.key.length > 1) return;
-    e.preventDefault();
-    handleTyping(typedText + e.key);
+
+    if (e.key.length === 1) {
+      e.preventDefault();
+      if (status === "idle") start();
+      if (status === "completed" || status === "paused") return;
+      handleTyping(typedText + e.key);
+    }
   };
 
-  // Mobile: sync from textarea value
-  const handleMobileInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+  // Handles virtual keyboard on mobile (onChange fires instead of keydown)
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     if (status === "idle") start();
     if (status === "completed" || status === "paused") return;
@@ -73,10 +85,15 @@ export function TypingTest({ passage, duration, onComplete, onNext }: TypingTest
     handleTyping(val);
   };
 
-  const focusMobile = () => {
-    mobileInputRef.current?.focus();
-    containerRef.current?.focus();
-  };
+  // Ghost cursor: where the personal-best "ghost" would be right now
+  const elapsedSeconds = duration - timeLeft;
+  const ghostIndex =
+    personalBestWpm && status === "running" && elapsedSeconds > 0
+      ? Math.min(
+          Math.floor((elapsedSeconds / 60) * personalBestWpm * 5),
+          passage.length - 1
+        )
+      : -1;
 
   const progress = ((duration - timeLeft) / duration) * 100;
   const timeWarning = timeLeft <= 10 && status === "running";
@@ -105,15 +122,23 @@ export function TypingTest({ passage, duration, onComplete, onNext }: TypingTest
           ))}
         </div>
 
-        <div className="flex flex-col items-end">
-          <span className="text-[10px] md:text-xs text-muted-foreground uppercase tracking-widest">Time</span>
-          <motion.span
-            animate={timeWarning ? { scale: [1, 1.08, 1] } : {}}
-            transition={{ repeat: Infinity, duration: 0.8 }}
-            className={`text-2xl md:text-3xl font-bold font-mono ${timeWarning ? "text-destructive" : "text-primary"}`}
-          >
-            {timeLeft}s
-          </motion.span>
+        <div className="flex flex-col items-end gap-1">
+          {ghostIndex >= 0 && (
+            <div className="text-[10px] font-mono text-orange-400/80 tracking-widest uppercase flex items-center gap-1">
+              <span className="inline-block w-2 h-2 rounded-full bg-orange-400/60 animate-pulse" />
+              Ghost {personalBestWpm} WPM
+            </div>
+          )}
+          <div className="flex flex-col items-end">
+            <span className="text-[10px] md:text-xs text-muted-foreground uppercase tracking-widest">Time</span>
+            <motion.span
+              animate={timeWarning ? { scale: [1, 1.08, 1] } : {}}
+              transition={{ repeat: Infinity, duration: 0.8 }}
+              className={`text-2xl md:text-3xl font-bold font-mono ${timeWarning ? "text-destructive" : "text-primary"}`}
+            >
+              {timeLeft}s
+            </motion.span>
+          </div>
         </div>
       </div>
 
@@ -127,7 +152,7 @@ export function TypingTest({ passage, duration, onComplete, onNext }: TypingTest
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 z-10 bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center gap-4"
+              className="absolute inset-0 z-20 bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center gap-4"
             >
               <h3 className="text-2xl font-mono font-bold uppercase tracking-widest">Paused</h3>
               <Button onClick={resume} size="lg" className="font-bold tracking-widest uppercase">
@@ -137,31 +162,17 @@ export function TypingTest({ passage, duration, onComplete, onNext }: TypingTest
           )}
         </AnimatePresence>
 
-        <CardContent className="p-4 md:p-8" onClick={focusMobile}>
-          {/* Hidden textarea for mobile virtual keyboard */}
-          <textarea
-            ref={mobileInputRef}
-            value={typedText}
-            onChange={handleMobileInput}
-            className="absolute opacity-0 pointer-events-none w-px h-px"
-            tabIndex={-1}
-            autoCapitalize="none"
-            autoCorrect="off"
-            autoComplete="off"
-            spellCheck={false}
-          />
-
+        <CardContent className="p-4 md:p-8 relative" onClick={focusInput}>
+          {/* Passage text — rendered on top of the textarea visually */}
           <div
-            ref={containerRef}
-            tabIndex={0}
-            onKeyDown={handleKeyDown}
-            onClick={focusMobile}
-            className="text-xl md:text-2xl lg:text-3xl font-mono leading-relaxed outline-none select-none break-words cursor-text"
+            className="text-xl md:text-2xl lg:text-3xl font-mono leading-relaxed select-none break-words relative z-10 pointer-events-none"
             style={{ wordSpacing: "0.15em" }}
           >
             {passage.split("").map((char, i) => {
               const state = getCharState(i);
-              let className = "transition-colors duration-75 ";
+              const isGhost = i === ghostIndex && state === "pending";
+
+              let className = "transition-colors duration-75 relative ";
               if (state === "correct") className += "text-primary opacity-80";
               else if (state === "wrong") className += "text-destructive bg-destructive/20 rounded-sm";
               else if (state === "current")
@@ -170,6 +181,9 @@ export function TypingTest({ passage, duration, onComplete, onNext }: TypingTest
 
               return (
                 <span key={i} className={className}>
+                  {isGhost && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-400/70 rounded" />
+                  )}
                   {char}
                 </span>
               );
@@ -177,10 +191,26 @@ export function TypingTest({ passage, duration, onComplete, onNext }: TypingTest
           </div>
 
           {status === "idle" && (
-            <p className="text-center text-muted-foreground font-mono text-sm mt-4 animate-pulse">
-              Tap here and start typing…
+            <p className="text-center text-muted-foreground font-mono text-sm mt-4 animate-pulse pointer-events-none">
+              {("ontouchstart" in window) ? "Tap here and start typing…" : "Click here and start typing…"}
             </p>
           )}
+
+          {/* Invisible textarea — covers the card so tap/click anywhere focuses it.
+              NOT pointer-events-none so mobile touch events reach it directly. */}
+          <textarea
+            ref={textareaRef}
+            value={typedText}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
+            className="absolute inset-0 w-full h-full opacity-0 resize-none cursor-text z-0 bg-transparent"
+            autoCapitalize="none"
+            autoCorrect="off"
+            autoComplete="off"
+            spellCheck={false}
+            tabIndex={0}
+            aria-label="Typing input"
+          />
         </CardContent>
       </Card>
 

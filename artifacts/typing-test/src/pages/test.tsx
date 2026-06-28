@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   useListPassages,
   useCreateResult,
+  useGetMyStats,
   getListPassagesQueryKey,
   getListResultsQueryKey,
   getGetMyStatsQueryKey,
@@ -45,6 +46,8 @@ export default function TestPage() {
 
   const { isSignedIn } = useAuth();
   const queryClient = useQueryClient();
+
+  const { data: myStats } = useGetMyStats({ query: { queryKey: getGetMyStatsQueryKey(), enabled: isSignedIn === true } });
 
   const { data: passages, isLoading, refetch } = useListPassages(
     { difficulty, count: 5 },
@@ -223,6 +226,7 @@ export default function TestPage() {
               key={`${currentPassage.id}-${duration}`}
               passage={currentPassage.text}
               duration={duration}
+              personalBestWpm={myStats?.bestWpm ?? undefined}
               onComplete={handleComplete}
               onNext={handleNext}
             />
