@@ -3,6 +3,7 @@ import { publishableKeyFromHost } from "@clerk/react/internal";
 import { shadcn } from "@clerk/themes";
 import { Switch, Route, Redirect, useLocation, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { AnimatePresence } from "framer-motion";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -14,6 +15,7 @@ import LeaderboardPage from "@/pages/leaderboard";
 import DailyPage from "@/pages/daily";
 import SignInPage from "@/pages/sign-in";
 import SignUpPage from "@/pages/sign-up";
+import ProfilePage from "@/pages/profile";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 const clerkPubKey = publishableKeyFromHost(window.location.hostname, import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
@@ -100,7 +102,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function ClerkProviderWithRoutes() {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
 
   return (
     <ClerkProvider
@@ -114,24 +116,29 @@ function ClerkProviderWithRoutes() {
     >
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
-          <Switch>
-            <Route path="/" component={HomeRedirect} />
-            <Route path="/test" component={TestPage} />
-            <Route path="/leaderboard" component={LeaderboardPage} />
-            <Route path="/dashboard">
-              <ProtectedRoute><DashboardPage /></ProtectedRoute>
-            </Route>
-            <Route path="/daily">
-              <ProtectedRoute><DailyPage /></ProtectedRoute>
-            </Route>
-            <Route path="/sign-in/*?">
-              <SignInPage />
-            </Route>
-            <Route path="/sign-up/*?">
-              <SignUpPage />
-            </Route>
-            <Route component={NotFound} />
-          </Switch>
+          <AnimatePresence mode="wait">
+            <Switch key={location}>
+              <Route path="/" component={HomeRedirect} />
+              <Route path="/test" component={TestPage} />
+              <Route path="/leaderboard" component={LeaderboardPage} />
+              <Route path="/dashboard">
+                <ProtectedRoute><DashboardPage /></ProtectedRoute>
+              </Route>
+              <Route path="/daily">
+                <ProtectedRoute><DailyPage /></ProtectedRoute>
+              </Route>
+              <Route path="/profile">
+                <ProtectedRoute><ProfilePage /></ProtectedRoute>
+              </Route>
+              <Route path="/sign-in/*?">
+                <SignInPage />
+              </Route>
+              <Route path="/sign-up/*?">
+                <SignUpPage />
+              </Route>
+              <Route component={NotFound} />
+            </Switch>
+          </AnimatePresence>
           <Toaster />
         </TooltipProvider>
       </QueryClientProvider>
