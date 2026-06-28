@@ -3,20 +3,31 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Typing Speed Test API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: results
+    description: Typing test results
+  - name: leaderboard
+    description: Global leaderboard
+  - name: achievements
+    description: User achievements
+  - name: stats
+    description: User statistics
+  - name: passages
+    description: Text passages
+  - name: daily
+    description: Daily challenge
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +35,278 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /results:
+    get:
+      operationId: listResults
+      tags: [results]
+      summary: List user's typing test results
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: List of results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TypingResult"
+    post:
+      operationId: createResult
+      tags: [results]
+      summary: Submit a typing test result
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TypingResultInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TypingResult"
+
+  /results/{id}:
+    get:
+      operationId: getResult
+      tags: [results]
+      summary: Get a single result
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TypingResult"
+        "404":
+          description: Not found
+
+  /stats/me:
+    get:
+      operationId: getMyStats
+      tags: [stats]
+      summary: Get the current user's personal statistics
+      responses:
+        "200":
+          description: Personal stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserStats"
+
+  /stats/history:
+    get:
+      operationId: getStatsHistory
+      tags: [stats]
+      summary: Get WPM history over time (for chart)
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 30 }
+      responses:
+        "200":
+          description: WPM history points
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WpmHistoryPoint"
+
+  /leaderboard:
+    get:
+      operationId: getLeaderboard
+      tags: [leaderboard]
+      summary: Get global leaderboard
+      parameters:
+        - name: duration
+          in: query
+          schema:
+            type: integer
+            enum: [15, 30, 60, 120]
+          description: Filter by test duration in seconds
+        - name: difficulty
+          in: query
+          schema:
+            type: string
+            enum: [easy, medium, hard]
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: Leaderboard entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LeaderboardEntry"
+
+  /achievements:
+    get:
+      operationId: listAchievements
+      tags: [achievements]
+      summary: List achievements for current user (earned + locked)
+      responses:
+        "200":
+          description: Achievements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Achievement"
+
+  /passages:
+    get:
+      operationId: listPassages
+      tags: [passages]
+      summary: Get random passages for typing test
+      parameters:
+        - name: difficulty
+          in: query
+          schema:
+            type: string
+            enum: [easy, medium, hard]
+        - name: count
+          in: query
+          schema: { type: integer, default: 3 }
+      responses:
+        "200":
+          description: Passages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Passage"
+
+  /daily-challenge:
+    get:
+      operationId: getDailyChallenge
+      tags: [daily]
+      summary: Get today's daily challenge passage and leaderboard
+      responses:
+        "200":
+          description: Daily challenge
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailyChallenge"
+
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
-        status:
-          type: string
-      required:
-        - status
+        status: { type: string }
 
+    TypingResult:
+      type: object
+      required: [id, userId, wpm, cpm, accuracy, duration, difficulty, mistakeCount, createdAt]
+      properties:
+        id: { type: integer }
+        userId: { type: string }
+        wpm: { type: number }
+        cpm: { type: number }
+        accuracy: { type: number }
+        duration: { type: integer }
+        difficulty: { type: string }
+        mistakeCount: { type: integer }
+        passageId: { type: ["integer", "null"] }
+        createdAt: { type: string }
+
+    TypingResultInput:
+      type: object
+      required: [wpm, cpm, accuracy, duration, difficulty, mistakeCount]
+      properties:
+        wpm: { type: number }
+        cpm: { type: number }
+        accuracy: { type: number }
+        duration: { type: integer }
+        difficulty: { type: string }
+        mistakeCount: { type: integer }
+        passageId: { type: ["integer", "null"] }
+
+    UserStats:
+      type: object
+      required: [totalTests, bestWpm, averageWpm, averageAccuracy, totalTimeSeconds, currentStreak]
+      properties:
+        totalTests: { type: integer }
+        bestWpm: { type: number }
+        averageWpm: { type: number }
+        averageAccuracy: { type: number }
+        totalTimeSeconds: { type: integer }
+        currentStreak: { type: integer }
+        rank: { type: ["integer", "null"] }
+
+    WpmHistoryPoint:
+      type: object
+      required: [date, wpm, accuracy]
+      properties:
+        date: { type: string }
+        wpm: { type: number }
+        accuracy: { type: number }
+
+    LeaderboardEntry:
+      type: object
+      required: [rank, userId, displayName, wpm, accuracy, duration, difficulty, createdAt]
+      properties:
+        rank: { type: integer }
+        userId: { type: string }
+        displayName: { type: string }
+        avatarUrl: { type: ["string", "null"] }
+        wpm: { type: number }
+        accuracy: { type: number }
+        duration: { type: integer }
+        difficulty: { type: string }
+        createdAt: { type: string }
+
+    Achievement:
+      type: object
+      required: [id, key, title, description, icon, earned]
+      properties:
+        id: { type: integer }
+        key: { type: string }
+        title: { type: string }
+        description: { type: string }
+        icon: { type: string }
+        earned: { type: boolean }
+        earnedAt: { type: ["string", "null"] }
+
+    Passage:
+      type: object
+      required: [id, text, difficulty, wordCount]
+      properties:
+        id: { type: integer }
+        text: { type: string }
+        difficulty: { type: string }
+        wordCount: { type: integer }
+
+    DailyChallenge:
+      type: object
+      required: [date, passage, leaderboard]
+      properties:
+        date: { type: string }
+        passage:
+          $ref: "#/components/schemas/Passage"
+        leaderboard:
+          type: array
+          items:
+            $ref: "#/components/schemas/LeaderboardEntry"

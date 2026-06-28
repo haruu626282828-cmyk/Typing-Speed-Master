@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Typing Speed Test"
+version = "1.0.0"
+id = "artifacts/typing-test"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21347
+
+[services.development]
+run = "pnpm --filter @workspace/typing-test run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/typing-test", "run", "build" ]
+publicDir = "artifacts/typing-test/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21347"
+BASE_PATH = "/"
