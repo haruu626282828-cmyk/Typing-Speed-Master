@@ -138,7 +138,7 @@ export default function DailyPage() {
                 </motion.div>
               ) : (
                 <TypingTest
-                  passage={daily.passage.text}
+                  passage={daily.passage?.text ?? ""}
                   duration={60}
                   onComplete={handleComplete}
                   onNext={() => setLastResult(null)}

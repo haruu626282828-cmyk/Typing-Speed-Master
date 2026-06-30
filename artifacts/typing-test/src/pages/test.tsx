@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { useAuth } from "@clerk/react";
 import { useQueryClient } from "@tanstack/react-query";
+import { FALLBACK_PASSAGES, getFallbackPassages } from "@/data/fallback-passages";
 import { Link } from "wouter";
 import { TypingTest } from "@/components/typing-test";
 import { AppHeader } from "@/components/app-header";
@@ -55,7 +56,15 @@ export default function TestPage() {
   );
 
   const createResult = useCreateResult();
-  const currentPassage = passages?.[passageIndex % (passages?.length || 1)];
+
+  // When the API is unavailable (Cloudflare Pages static deploy, offline, etc.)
+  // fall back to the bundled passages so the typing test always has text.
+  const resolvedPassages =
+    !isLoading && !passages?.length
+      ? getFallbackPassages(difficulty)
+      : (passages ?? getFallbackPassages(difficulty));
+
+  const currentPassage = resolvedPassages[passageIndex % (resolvedPassages.length || 1)];
 
   const handleComplete = useCallback(
     (stats: { wpm: number; cpm: number; accuracy: number; mistakes: number }) => {

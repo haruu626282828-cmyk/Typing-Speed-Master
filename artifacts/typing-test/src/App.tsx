@@ -1,8 +1,8 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ClerkProvider, Show, useClerk, useAuth } from "@clerk/react";
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { shadcn } from "@clerk/themes";
-import { Switch, Route, Redirect, useLocation, Router as WouterRouter } from "wouter";
+import { Switch, Route, Redirect, useLocation, Router as WouterRouter, Link } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence } from "framer-motion";
 import { Toaster } from "@/components/ui/toaster";
@@ -17,17 +17,23 @@ import DailyPage from "@/pages/daily";
 import SignInPage from "@/pages/sign-in";
 import SignUpPage from "@/pages/sign-up";
 import ProfilePage from "@/pages/profile";
+import { TypingTest } from "@/components/typing-test";
+import { FALLBACK_PASSAGES } from "@/data/fallback-passages";
 
-// REQUIRED — copy verbatim per Clerk skill. Resolves the publishable key from
-// the hostname so the same build serves multiple Clerk custom domains. Falls
-// back to VITE_CLERK_PUBLISHABLE_KEY when the host doesn't map to a custom domain.
-const clerkPubKey = publishableKeyFromHost(
-  window.location.hostname,
-  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
-);
+// REQUIRED — resolves publishable key from hostname so the same build can
+// serve multiple Clerk custom domains. Falls back to the env var.
+let clerkPubKey: string | undefined;
+try {
+  clerkPubKey = publishableKeyFromHost(
+    window.location.hostname,
+    import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
+  ) || undefined;
+} catch {
+  clerkPubKey = undefined;
+}
 
-// REQUIRED — copy verbatim. Empty in dev (Clerk hits FAPI directly), auto-set
-// in prod by Replit. Do NOT gate on import.meta.env.PROD / NODE_ENV.
+// REQUIRED — empty in dev (Clerk hits FAPI directly). On Cloudflare Pages set
+// VITE_CLERK_PROXY_URL=https://<your-app>.replit.app/api/__clerk
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -110,13 +116,11 @@ function ClerkQueryClientCacheInvalidator() {
   return null;
 }
 
-// Show the homepage during Clerk's loading phase so there is never a blank
-// screen. Once Clerk resolves auth state, redirect signed-in users to /test.
+// Show the homepage during Clerk loading so there is never a blank screen.
+// Once Clerk resolves auth state, redirect signed-in users to /test.
 function HomeRedirect() {
   const { isLoaded, isSignedIn } = useAuth();
-
   if (!isLoaded) return <HomePage />;
-
   return (
     <>
       <Show when="signed-in">
@@ -145,7 +149,7 @@ function ClerkProviderWithRoutes() {
 
   return (
     <ClerkProvider
-      publishableKey={clerkPubKey}
+      publishableKey={clerkPubKey!}
       proxyUrl={clerkProxyUrl}
       appearance={clerkAppearance}
       signInUrl={`${basePath}/sign-in`}
@@ -186,8 +190,82 @@ function ClerkProviderWithRoutes() {
   );
 }
 
-// Error boundary catches any uncaught React render errors so the user sees
-// a useful message instead of a completely blank screen.
+// ─── Guest Mode ───────────────────────────────────────────────────────────────
+// Rendered when VITE_CLERK_PUBLISHABLE_KEY is not set at build time.
+// Provides a fully functional typing test with bundled passages so the app
+// works without a backend. Auth features are unavailable but clearly explained.
+
+function GuestModeApp() {
+  const [passageIdx, setPassageIdx] = useState(0);
+  const passage = FALLBACK_PASSAGES[passageIdx % FALLBACK_PASSAGES.length];
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <div className="min-h-screen bg-background text-foreground flex flex-col">
+        {/* Minimal header — no Clerk hooks */}
+        <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur">
+          <div className="container mx-auto px-4 h-14 flex items-center justify-between">
+            <Link href="/" className="font-mono font-bold text-xl tracking-tighter uppercase text-primary hover:opacity-80 transition-opacity">
+              TYPER
+            </Link>
+            <div className="flex items-center gap-3 text-xs font-mono text-muted-foreground">
+              <span>Auth requires env config</span>
+              <a
+                href="https://github.com/haruu626282828-cmyk/Typing-Speed-Master#readme"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
+                Setup guide
+              </a>
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 container mx-auto px-4 py-8 max-w-5xl flex flex-col gap-6">
+          {/* Env config notice */}
+          <div className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 font-mono text-xs text-muted-foreground leading-relaxed">
+            <span className="text-primary font-bold">Guest mode</span> — typing test runs locally with bundled passages.
+            {" "}To enable sign-in, leaderboard, and stats, set{" "}
+            <code className="bg-muted px-1 rounded text-foreground">VITE_CLERK_PUBLISHABLE_KEY</code> and{" "}
+            <code className="bg-muted px-1 rounded text-foreground">VITE_CLERK_PROXY_URL</code> in your Cloudflare Pages environment variables.
+          </div>
+
+          {/* Passage selector */}
+          <div className="flex flex-wrap gap-3 font-mono text-xs">
+            {(["easy", "medium", "hard"] as const).map((d) => (
+              <button
+                key={d}
+                onClick={() => {
+                  const idx = FALLBACK_PASSAGES.findIndex((p) => p.difficulty === d);
+                  if (idx >= 0) setPassageIdx(idx);
+                }}
+                className={`px-3 py-1 rounded capitalize transition-colors ${
+                  passage.difficulty === d
+                    ? "bg-primary text-primary-foreground font-bold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {d}
+              </button>
+            ))}
+          </div>
+
+          <TypingTest
+            key={passage.id}
+            passage={passage.text}
+            duration={30}
+            onComplete={() => {}}
+            onNext={() => setPassageIdx((i) => i + 1)}
+          />
+        </main>
+      </div>
+      <Toaster />
+    </QueryClientProvider>
+  );
+}
+
+// ─── Error Boundary ───────────────────────────────────────────────────────────
 interface ErrorBoundaryState { hasError: boolean; message: string }
 class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, ErrorBoundaryState> {
   constructor(props: { children: React.ReactNode }) {
@@ -202,9 +280,7 @@ class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, Er
       return (
         <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center gap-6 p-8 font-mono">
           <div className="text-5xl font-bold text-primary tracking-tighter">TYPER</div>
-          <p className="text-muted-foreground text-center max-w-sm">
-            Something went wrong loading the app.
-          </p>
+          <p className="text-muted-foreground text-center max-w-sm">Something went wrong loading the app.</p>
           <p className="text-xs text-muted-foreground/60 text-center max-w-sm">{this.state.message}</p>
           <button
             onClick={() => window.location.reload()}
@@ -219,13 +295,23 @@ class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, Er
   }
 }
 
+// ─── Root ─────────────────────────────────────────────────────────────────────
 function App() {
   return (
     <AppErrorBoundary>
       <ThemeProvider defaultTheme="dark" storageKey="typer-theme">
-        <WouterRouter base={basePath}>
-          <ClerkProviderWithRoutes />
-        </WouterRouter>
+        {clerkPubKey ? (
+          // Full app with Clerk auth
+          <WouterRouter base={basePath}>
+            <ClerkProviderWithRoutes />
+          </WouterRouter>
+        ) : (
+          // Guest mode: Clerk key not configured at build time.
+          // Typing test works with bundled passages; auth is unavailable.
+          <WouterRouter base={basePath}>
+            <GuestModeApp />
+          </WouterRouter>
+        )}
       </ThemeProvider>
     </AppErrorBoundary>
   );
