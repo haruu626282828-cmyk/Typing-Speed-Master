@@ -1,8 +1,9 @@
-import { ClerkProvider, Show, useClerk } from "@clerk/react";
+import React, { useEffect, useRef } from "react";
+import { ClerkProvider, Show, useClerk, useAuth } from "@clerk/react";
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { shadcn } from "@clerk/themes";
 import { Switch, Route, Redirect, useLocation, Router as WouterRouter } from "wouter";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence } from "framer-motion";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -17,9 +18,19 @@ import SignInPage from "@/pages/sign-in";
 import SignUpPage from "@/pages/sign-up";
 import ProfilePage from "@/pages/profile";
 
-const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
-const clerkPubKey = publishableKeyFromHost(window.location.hostname, import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
+// REQUIRED — copy verbatim per Clerk skill. Resolves the publishable key from
+// the hostname so the same build serves multiple Clerk custom domains. Falls
+// back to VITE_CLERK_PUBLISHABLE_KEY when the host doesn't map to a custom domain.
+const clerkPubKey = publishableKeyFromHost(
+  window.location.hostname,
+  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
+);
+
+// REQUIRED — copy verbatim. Empty in dev (Clerk hits FAPI directly), auto-set
+// in prod by Replit. Do NOT gate on import.meta.env.PROD / NODE_ENV.
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
+
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 function stripBase(path: string): string {
   return basePath && path.startsWith(basePath)
@@ -79,11 +90,37 @@ const clerkAppearance = {
 
 const queryClient = new QueryClient();
 
+// Invalidates the React Query cache when the signed-in user changes.
+function ClerkQueryClientCacheInvalidator() {
+  const { addListener } = useClerk();
+  const qc = useQueryClient();
+  const prevUserIdRef = useRef<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    const unsubscribe = addListener(({ user }) => {
+      const userId = user?.id ?? null;
+      if (prevUserIdRef.current !== undefined && prevUserIdRef.current !== userId) {
+        qc.clear();
+      }
+      prevUserIdRef.current = userId;
+    });
+    return unsubscribe;
+  }, [addListener, qc]);
+
+  return null;
+}
+
+// Show the homepage during Clerk's loading phase so there is never a blank
+// screen. Once Clerk resolves auth state, redirect signed-in users to /test.
 function HomeRedirect() {
+  const { isLoaded, isSignedIn } = useAuth();
+
+  if (!isLoaded) return <HomePage />;
+
   return (
     <>
       <Show when="signed-in">
-        <Redirect to="/test" />
+        {isSignedIn ? <Redirect to="/test" /> : null}
       </Show>
       <Show when="signed-out">
         <HomePage />
@@ -93,6 +130,8 @@ function HomeRedirect() {
 }
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isLoaded, isSignedIn } = useAuth();
+  if (!isLoaded) return null;
   return (
     <>
       <Show when="signed-in">{children}</Show>
@@ -115,6 +154,7 @@ function ClerkProviderWithRoutes() {
       routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
     >
       <QueryClientProvider client={queryClient}>
+        <ClerkQueryClientCacheInvalidator />
         <TooltipProvider>
           <AnimatePresence mode="wait">
             <Switch key={location}>
@@ -146,13 +186,48 @@ function ClerkProviderWithRoutes() {
   );
 }
 
+// Error boundary catches any uncaught React render errors so the user sees
+// a useful message instead of a completely blank screen.
+interface ErrorBoundaryState { hasError: boolean; message: string }
+class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, ErrorBoundaryState> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, message: "" };
+  }
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, message: error.message };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center gap-6 p-8 font-mono">
+          <div className="text-5xl font-bold text-primary tracking-tighter">TYPER</div>
+          <p className="text-muted-foreground text-center max-w-sm">
+            Something went wrong loading the app.
+          </p>
+          <p className="text-xs text-muted-foreground/60 text-center max-w-sm">{this.state.message}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-6 py-2 bg-primary text-primary-foreground rounded font-bold uppercase tracking-widest hover:opacity-90 transition-opacity"
+          >
+            Reload
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function App() {
   return (
-    <ThemeProvider defaultTheme="dark" storageKey="typer-theme">
-      <WouterRouter base={basePath}>
-        <ClerkProviderWithRoutes />
-      </WouterRouter>
-    </ThemeProvider>
+    <AppErrorBoundary>
+      <ThemeProvider defaultTheme="dark" storageKey="typer-theme">
+        <WouterRouter base={basePath}>
+          <ClerkProviderWithRoutes />
+        </WouterRouter>
+      </ThemeProvider>
+    </AppErrorBoundary>
   );
 }
 

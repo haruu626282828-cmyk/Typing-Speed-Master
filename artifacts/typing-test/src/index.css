@@ -1,5 +1,10 @@
+/* Declare layer order BEFORE tailwindcss import — required for @clerk/themes
+   to stay in the correct cascade position in production builds (Tailwind v4). */
+@layer theme, base, clerk, components, utilities;
+
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "@clerk/themes/shadcn.css";
 @plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));

@@ -15,7 +15,10 @@ export default defineConfig({
   base: basePath,
   plugins: [
     react(),
-    tailwindcss(),
+    // optimize: false required for Tailwind v4 + @clerk/themes in production.
+    // Without it, lightningcss reorders @layer declarations from the themes
+    // package, causing Clerk UI to render broken in prod but fine in dev.
+    tailwindcss({ optimize: false }),
     // Replit dev-only plugins — never loaded in production or outside Replit
     ...(!isProduction && isReplit
       ? await Promise.all([
