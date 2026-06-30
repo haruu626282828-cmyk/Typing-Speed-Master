@@ -1,1 +1,8 @@
+# API paths must NOT be caught by the SPA rewrite.
+# When VITE_API_BASE_URL is set they are absolute URLs (bypass Cloudflare).
+# When it is not set they will reach the backend through Cloudflare's proxy
+# (Workers / Pages Functions), so let them 404 rather than serving index.html.
+/api/*  /404  404
+
+# Client-side routing — every other path serves the SPA shell.
 /*  /index.html  200

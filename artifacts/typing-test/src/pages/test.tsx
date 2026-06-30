@@ -57,12 +57,19 @@ export default function TestPage() {
 
   const createResult = useCreateResult();
 
-  // When the API is unavailable (Cloudflare Pages static deploy, offline, etc.)
-  // fall back to the bundled passages so the typing test always has text.
-  const resolvedPassages =
-    !isLoading && !passages?.length
-      ? getFallbackPassages(difficulty)
-      : (passages ?? getFallbackPassages(difficulty));
+  // Guard: the SPA catch-all on Cloudflare Pages can return index.html (a
+  // string) as a 200 OK for /api/* requests when VITE_API_BASE_URL is not set.
+  // Validate that the API actually returned an array of passage objects before
+  // using it — otherwise fall back to the bundled passages.
+  const validApiPassages =
+    Array.isArray(passages) &&
+    passages.length > 0 &&
+    typeof passages[0] === "object" &&
+    passages[0] !== null
+      ? passages
+      : null;
+
+  const resolvedPassages = validApiPassages ?? getFallbackPassages(difficulty);
 
   const currentPassage = resolvedPassages[passageIndex % (resolvedPassages.length || 1)];
 
@@ -225,8 +232,8 @@ export default function TestPage() {
             )}
           </AnimatePresence>
 
-          {/* Typing area */}
-          {isLoading ? (
+          {/* Typing area — always render once we have a passage (fallback or API) */}
+          {isLoading && !validApiPassages ? (
             <div className="flex items-center justify-center h-48">
               <div className="font-mono text-muted-foreground animate-pulse">Loading passage…</div>
             </div>
