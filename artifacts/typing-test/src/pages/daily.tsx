@@ -153,13 +153,13 @@ export default function DailyPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {daily.leaderboard.length === 0 ? (
+                  {(daily.leaderboard ?? []).length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground font-mono text-sm">
                       No submissions yet today. Be the first!
                     </div>
                   ) : (
                     <div className="space-y-1.5">
-                      {daily.leaderboard.map((entry, i) => (
+                      {(daily.leaderboard ?? []).map((entry, i) => (
                         <motion.div
                           key={entry.userId}
                           initial={{ opacity: 0, x: -10 }}
@@ -170,7 +170,7 @@ export default function DailyPage() {
                           <span className="font-mono text-xs md:text-sm text-muted-foreground w-5 text-center shrink-0">#{entry.rank}</span>
                           <Avatar className="h-6 w-6 md:h-7 md:w-7 border border-border/50 shrink-0">
                             <AvatarFallback className="bg-muted text-[10px] font-mono">
-                              {entry.displayName.slice(0, 2).toUpperCase()}
+                              {(entry.displayName ?? "??").slice(0, 2).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
                           <span className="flex-1 font-mono font-medium text-sm truncate">{entry.displayName}</span>

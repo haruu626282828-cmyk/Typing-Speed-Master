@@ -25,7 +25,9 @@ interface UseTypingTestReturn {
   getCharState: (index: number) => "correct" | "wrong" | "pending" | "current";
 }
 
-export function useTypingTest({ passage, duration }: UseTypingTestProps): UseTypingTestReturn {
+export function useTypingTest({ passage: passageProp, duration }: UseTypingTestProps): UseTypingTestReturn {
+  // Guard against null/undefined passage — always work with a string
+  const passage = passageProp ?? "";
   const [status, setStatus] = useState<TestStatus>("idle");
   const [timeLeft, setTimeLeft] = useState(duration);
   const [typedText, setTypedText] = useState("");

@@ -114,7 +114,7 @@ export default function LeaderboardPage() {
                       </div>
                       <Avatar className="h-7 w-7 md:h-8 md:w-8 shrink-0 border border-border/50">
                         <AvatarFallback className="bg-muted text-muted-foreground text-[10px] md:text-xs font-mono">
-                          {entry.displayName.slice(0, 2).toUpperCase()}
+                          {(entry.displayName ?? "??").slice(0, 2).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                       <span className="flex-1 font-mono font-medium text-sm truncate">{entry.displayName}</span>

@@ -14,7 +14,9 @@ interface TypingTestProps {
   onNext: () => void;
 }
 
-export function TypingTest({ passage, duration, personalBestWpm, onComplete, onNext }: TypingTestProps) {
+export function TypingTest({ passage: passageProp, duration, personalBestWpm, onComplete, onNext }: TypingTestProps) {
+  // Guard against null/undefined passage prop — always work with a string
+  const passage = passageProp ?? "";
   const {
     status,
     timeLeft,
@@ -81,7 +83,7 @@ export function TypingTest({ passage, duration, personalBestWpm, onComplete, onN
     const val = e.target.value;
     if (status === "idle") start();
     if (status === "completed" || status === "paused") return;
-    if (val.length > passage.length) return;
+    if (!passage || val.length > passage.length) return;
     handleTyping(val);
   };
 
